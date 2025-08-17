@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Prototipe Pertanian (Single File)</title>
+  <style>
+    /* styles.css content */
+    body{font-family:system-ui,Segoe UI,Arial,sans-serif;margin:0;background:#f5f5f5;color:#222}
+    header{background:#388e3c;color:#fff;padding:10px;text-align:center}
+    .container{padding:14px;max-width:900px;margin:0 auto}
+    .card{background:#fff;margin-bottom:14px;padding:12px;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,.1)}
+    h3{margin:0 0 10px}
+    select,input,textarea{width:100%;padding:8px;margin:6px 0;border:1px solid #ccc;border-radius:6px}
+    button{background:#388e3c;color:#fff;border:none;padding:8px 12px;border-radius:6px;cursor:pointer}
+    button:hover{opacity:.9}
+    .btn-danger{background:#d32f2f}
+    .btn-warning{background:#fbc02d;color:#000}
+    .row-btn{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+    .note{background:#e8f5e9;padding:8px;border-radius:6px;margin:6px 0}
+    .step{background:#fafafa;border:1px solid #eee;border-radius:6px;padding:8px;margin:6px 0}
+    .step .actions{margin-top:6px;display:flex;gap:6px}
+    .tips-box{margin-top:8px;background:#f1f8e9;border:1px solid #dcedc8;border-radius:6px;padding:8px;white-space:pre-wrap}
+    .hidden{display:none}
+    footer{opacity:.7;text-align:center;margin:8px 0}
+  </style>
+</head>
+<body>
+  <header>
+    <h2>🌱 Prototipe Pertanian - Single File</h2>
+    <p>Offline, LocalStorage — Default: Cabe, Cengkeh, Nilam</p>
+  </header>
+
+  <div class="container">
+
+    <div class="card">
+      <h3>Pilih Tanaman</h3>
+      <select id="plantSelect" onchange="App.showGuide()"></select>
+      <div class="row-btn">
+        <button class="btn-warning" onclick="App.editPlant()">✏️ Edit Nama</button>
+        <button class="btn-danger" onclick="App.deletePlant()">🗑️ Hapus</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Panduan Tahapan</h3>
+      <div id="guideContent"></div>
+      <div class="row-btn">
+        <button onclick="App.addStep()">+ Tambah Tahapan</button>
+        <button onclick="App.resetToDefault()">↺ Reset ke Default Tanaman Ini</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Tips Hasil Konsisten</h3>
+      <textarea id="tipsInput" placeholder="Contoh: benih bersertifikat, rotasi tanaman, pemupukan berimbang..."></textarea>
+      <div class="row-btn">
+        <button onclick="App.saveTips()">Simpan Tips</button>
+        <button onclick="App.editTips()">Edit Tips</button>
+      </div>
+      <div id="tipsDisplay" class="tips-box"></div>
+    </div>
+
+    <div class="card">
+      <h3>Tambah Catatan</h3>
+      <textarea id="noteInput" placeholder="Tuliskan catatan (tanggal tanam, pemupukan, hama, dll)"></textarea>
+      <button onclick="App.saveNote()">Simpan Catatan</button>
+    </div>
+
+    <div class="card">
+      <h3>Catatan Tersimpan</h3>
+      <div id="notesList"></div>
+    </div>
+
+    <div class="card">
+      <h3>Tambah / Template Tanaman</h3>
+      <div class="row-btn">
+        <button onclick="App.openAddPlant()">+ Tambah Tanaman Manual</button>
+        <button onclick="App.addPlantFromTemplate()">+ Tambah dari Template Default</button>
+      </div>
+      <div id="addPlantForm" class="hidden"></div>
+    </div>
+
+    <div class="card">
+      <h3>Backup & Restore</h3>
+      <div class="row-btn">
+        <button onclick="App.exportData()">💾 Export JSON</button>
+        <input type="file" id="importFile" accept="application/json" onchange="App.importData(event)">
+      </div>
+    </div>
+
+    <footer>
+      <small>Versi prototipe offline. Data disimpan di LocalStorage perangkat ini.</small>
+    </footer>
+  </div>
+
+  <script>
+    /* app.js inline */
+const DefaultTemplates = {
+  cabe: {
+    nama: "Cabe",
+    guide: [
+      { tahap:"Persiapan Lahan", detail:"Bersihkan gulma, olah tanah; aplikasikan pupuk dasar organik 2–3 kg/m²; bedengan 30–40 cm tinggi, 1 m lebar, mulsa plastik bila ada." },
+      { tahap:"Benih", detail:"Benih bersertifikat; rendam 6–12 jam; semai di tray/bedengan; gunakan Trichoderma pada media semai." },
+      { tahap:"Elevasi", detail:"Pastikan bedengan elevasi cukup untuk drainase; buat saluran air antar bedengan; hindari genangan." },
+      { tahap:"Hari Setelah Tanam (HST)", detail:"Pemupukan susulan N-P-K bertahap: kisaran HST 7–10, 20–25, 35–40 sesuai dosis setempat." },
+      { tahap:"Vegetatif", detail:"Pasang ajir/lanjaran; pemangkasan tunas liar; pupuk daun dosis ringan; pengendalian OPT terpadu." },
+      { tahap:"Generatif", detail:"Fokus K (mis. KCl) untuk pembentukan buah; jaga kelembapan; sanitasi buah sakit." },
+      { tahap:"Panen", detail:"Panen bertahap saat merah 80–100%; sortasi; simpan teduh beraliran udara." }
+    ],
+    tips: "Benih bersertifikat; mulsa + drainase baik; pemupukan berimbang; monitoring OPT; sanitasi kebun; catat dosis & HST."
+  },
+  cengkeh: {
+    nama: "Cengkeh",
+    guide: [
+      { tahap:"Persiapan Lahan", detail:"Drainase baik; bersihkan gulma; perbaiki pH; kompos di lubang tanam." },
+      { tahap:"Benih", detail:"Bibit sehat dari sumber tepercaya; naungan awal; media gembur kaya organik." },
+      { tahap:"Elevasi", detail:"Guludan ringan di lahan basah; hindari genangan; siapkan rorak/saluran air." },
+      { tahap:"Hari Setelah Tanam (HST)", detail:"Pemupukan dasar & susulan periodik (mis. 6 bulanan) dengan N-P-K + organik; penyiangan rutin." },
+      { tahap:"Vegetatif", detail:"Pemangkasan bentuk & sanitasi; kompos di piringan; mulsa organik." },
+      { tahap:"Generatif", detail:"Jaga kesehatan kanopi; pengendalian penyakit bunga/batang; dukung unsur K & mikro." },
+      { tahap:"Panen", detail:"Panen bunga saat 1/2 mekar; pengeringan higienis; penyimpanan kering." }
+    ],
+    tips: "Bibit unggul & sehat; naungan awal; pemupukan organik berkala; manajemen air; pemangkasan sanitasi; PHT; catat produksi."
+  },
+  nilam: {
+    nama: "Nilam",
+    guide: [
+      { tahap:"Persiapan Lahan", detail:"Olah tanah; pupuk kandang matang; bedengan 25–30 cm; pH 5.5–6.5; drainase baik." },
+      { tahap:"Benih", detail:"Stek batang sehat 3–4 ruas; rendam hormon akar; semai di media lembab teduh." },
+      { tahap:"Elevasi", detail:"Pastikan lahan tidak becek; perbaiki alur air; bedengan untuk curah hujan tinggi." },
+      { tahap:"Hari Setelah Tanam (HST)", detail:"Susulan NPK tiap ±30 hari; penyiangan & penggemburan ringan." },
+      { tahap:"Vegetatif", detail:"POC berkala; pemangkasan untuk merangsang percabangan; pengendalian gulma." },
+      { tahap:"Generatif", detail:"Pertahankan kesehatan daun untuk rendemen minyak; suplai K & mikro; hindari stres air." },
+      { tahap:"Panen", detail:"Panen daun umur 6–8 bulan; pengeringan baik; destilasi sesuai SOP." }
+    ],
+    tips: "Stek sehat; rotasi lokasi; drainase baik; pemupukan berimbang; kontrol panen & pengeringan."
+  }
+};
+
+// --- Storage helpers ---
+const Storage = {
+  getPlants() {
+    const p = localStorage.getItem("plants");
+    return p ? JSON.parse(p) : JSON.parse(JSON.stringify(DefaultTemplates));
+  },
+  savePlants(plants) {
+    localStorage.setItem("plants", JSON.stringify(plants));
+  },
+  getNotes() {
+    return JSON.parse(localStorage.getItem("notes") || "[]");
+  },
+  saveNotes(notes) {
+    localStorage.setItem("notes", JSON.stringify(notes));
+  }
+};
+
+let Plants = Storage.getPlants();
+
+const App = {
+  init() {
+    this.sel = document.getElementById("plantSelect");
+    this.guideDiv = document.getElementById("guideContent");
+    this.tipsDisplay = document.getElementById("tipsDisplay");
+    this.tipsInput = document.getElementById("tipsInput");
+    this.noteInput = document.getElementById("noteInput");
+    this.notesList = document.getElementById("notesList");
+    this.addPlantForm = document.getElementById("addPlantForm");
+    this.renderPlantOptions();
+    this.showGuide();
+    this.loadNotes();
+  },
+  renderPlantOptions() {
+    this.sel.innerHTML = "";
+    Object.keys(Plants).forEach(k => {
+      this.sel.innerHTML += `<option value="${k}">${Plants[k].nama}</option>`;
+    });
+  },
+  currentKey() { return this.sel.value; },
+  showGuide() {
+    const key = this.currentKey();
+    if(!key) return;
+    const plant = Plants[key];
+    // Guide
+    this.guideDiv.innerHTML = "";
+    (plant.guide || []).forEach((g, i) => {
+      const div = document.createElement("div");
+      div.className = "step";
+      div.innerHTML = `<b>${g.tahap}:</b> ${g.detail}
+        <div class="actions">
+          <button class="btn-warning" onclick="App.editStep('${key}', ${i})">Edit</button>
+          <button class="btn-danger" onclick="App.deleteStep('${key}', ${i})">Hapus</button>
+        </div>`;
+      this.guideDiv.appendChild(div);
+    });
+    this.tipsDisplay.textContent = plant.tips || "Belum ada tips.";
+  },
+  addStep() {
+    const key = this.currentKey();
+    const tahap = prompt("Nama Tahap (mis: Elevasi / HST / Vegetatif):");
+    const detail = prompt("Detail Tahap:");
+    if(!tahap || !detail) return;
+    Plants[key].guide.push({ tahap, detail });
+    Storage.savePlants(Plants);
+    this.showGuide();
+  },
+  editStep(key, i) {
+    const t = Plants[key].guide[i];
+    const tahap = prompt("Edit Tahap:", t.tahap);
+    const detail = prompt("Edit Detail:", t.detail);
+    if(!tahap || !detail) return;
+    Plants[key].guide[i] = { tahap, detail };
+    Storage.savePlants(Plants);
+    this.showGuide();
+  },
+  deleteStep(key, i) {
+    if(!confirm("Hapus tahap ini?")) return;
+    Plants[key].guide.splice(i,1);
+    Storage.savePlants(Plants);
+    this.showGuide();
+  },
+  saveTips() {
+    const key = this.currentKey();
+    const val = this.tipsInput.value.trim();
+    if(!val) return alert("Isi tips terlebih dahulu.");
+    Plants[key].tips = val;
+    Storage.savePlants(Plants);
+    this.tipsInput.value = "";
+    this.showGuide();
+  },
+  editTips() {
+    const key = this.currentKey();
+    const now = Plants[key].tips || "";
+    const v = prompt("Edit Tips:", now);
+    if(v===null) return;
+    Plants[key].tips = v;
+    Storage.savePlants(Plants);
+    this.showGuide();
+  },
+  saveNote() {
+    const key = this.currentKey();
+    const text = this.noteInput.value.trim();
+    if(!text) return alert("Isi catatan dulu!");
+    const notes = Storage.getNotes();
+    notes.push({ plant:key, text, time: new Date().toLocaleString() });
+    Storage.saveNotes(notes);
+    this.noteInput.value = "";
+    this.loadNotes();
+  },
+  loadNotes() {
+    const notes = Storage.getNotes();
+    this.notesList.innerHTML = "";
+    notes.forEach((n,i) => {
+      const div = document.createElement("div");
+      div.className = "note";
+      const name = Plants[n.plant]?.nama || n.plant;
+      div.innerHTML = `<b>${name}</b> - ${n.time}<br>${n.text}
+        <div class="row-btn"><button class="btn-danger" onclick="App.deleteNote(${i})">Hapus</button></div>`;
+      this.notesList.appendChild(div);
+    });
+  },
+  deleteNote(i) {
+    const notes = Storage.getNotes();
+    notes.splice(i,1);
+    Storage.saveNotes(notes);
+    this.loadNotes();
+  },
+  editPlant() {
+    const key = this.currentKey();
+    const newName = prompt("Ubah nama tanaman:", Plants[key].nama);
+    if(!newName) return;
+    Plants[key].nama = newName.trim();
+    Storage.savePlants(Plants);
+    this.renderPlantOptions();
+    this.sel.value = key;
+  },
+  deletePlant() {
+    const key = this.currentKey();
+    if(!confirm("Hapus tanaman ini?")) return;
+    delete Plants[key];
+    Storage.savePlants(Plants);
+    this.renderPlantOptions();
+    this.showGuide();
+  },
+  resetToDefault() {
+    const key = this.currentKey();
+    if(!DefaultTemplates[key]) return alert("Tidak ada template default untuk tanaman ini.");
+    if(!confirm("Kembalikan panduan & tips ke versi default?")) return;
+    Plants[key] = JSON.parse(JSON.stringify(DefaultTemplates[key]));
+    Storage.savePlants(Plants);
+    this.showGuide();
+  },
+  openAddPlant() {
+    const el = this.addPlantForm;
+    el.classList.remove("hidden");
+    el.innerHTML = `
+      <h4>Tambah Tanaman Manual</h4>
+      <input id="npName" placeholder="Nama Tanaman">
+      <div id="npSteps"></div>
+      <div class="row-btn">
+        <button onclick="App.npAddStep()">+ Tahap</button>
+        <button onclick="App.npSave()">Simpan</button>
+        <button class="btn-danger" onclick="App.npCancel()">Batal</button>
+      </div>
+    `;
+    this.npAddStep();
+  },
+  npAddStep() {
+    const box = document.getElementById("npSteps");
+    const idx = box.children.length;
+    const wrap = document.createElement("div");
+    wrap.className = "step";
+    wrap.innerHTML = `<input placeholder="Tahap #${idx+1}"><input placeholder="Detail Tahap">`;
+    box.appendChild(wrap);
+  },
+  npSave() {
+    const name = document.getElementById("npName").value.trim();
+    if(!name) return alert("Nama tanaman wajib diisi.");
+    const stepsBox = document.getElementById("npSteps");
+    const inputs = stepsBox.querySelectorAll("input");
+    const steps = [];
+    for(let i=0;i<inputs.length;i+=2){
+      const tahap = inputs[i].value.trim();
+      const detail = inputs[i+1].value.trim();
+      if(tahap && detail) steps.push({tahap, detail});
+    }
+    if(!steps.length) return alert("Isi minimal satu tahap.");
+    const key = name.toLowerCase().replace(/\s+/g,'_');
+    Plants[key] = { nama:name, guide:steps, tips:"" };
+    Storage.savePlants(Plants);
+    this.renderPlantOptions();
+    this.sel.value = key;
+    this.showGuide();
+    this.npCancel();
+  },
+  npCancel() {
+    const el = this.addPlantForm;
+    el.classList.add("hidden");
+    el.innerHTML = "";
+  },
+  addPlantFromTemplate() {
+    const keys = Object.keys(DefaultTemplates);
+    const choice = prompt(`Pilih template (ketik): ${keys.join(", ")}`);
+    if(!choice) return;
+    const key = choice.toLowerCase().trim();
+    if(!DefaultTemplates[key]) return alert("Template tidak ditemukan.");
+    let newKey = key;
+    let suffix = 2;
+    while(Plants[newKey]) { newKey = `${key}_${suffix++}`; }
+    Plants[newKey] = JSON.parse(JSON.stringify(DefaultTemplates[key]));
+    Storage.savePlants(Plants);
+    this.renderPlantOptions();
+    this.sel.value = newKey;
+    this.showGuide();
+  },
+  exportData() {
+    const data = { plants: Plants, notes: Storage.getNotes(), exportedAt: new Date().toISOString() };
+    const blob = new Blob([JSON.stringify(data,null,2)], {type:"application/json"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "pertanian_data.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  },
+  importData(e) {
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try{
+        const data = JSON.parse(evt.target.result);
+        if(data.plants) Plants = data.plants;
+        if(data.notes) Storage.saveNotes(data.notes);
+        Storage.savePlants(Plants);
+        this.renderPlantOptions();
+        this.showGuide();
+        this.loadNotes();
+        alert("Data berhasil diimport.");
+      }catch(err){ alert("Gagal import: format tidak valid."); }
+    };
+    reader.readAsText(file);
+  }
+};
+
+window.App = App;
+window.addEventListener("DOMContentLoaded", ()=> App.init());
+  </script>
+</body>
+</html>
